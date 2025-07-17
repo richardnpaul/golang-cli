@@ -1,0 +1,407 @@
+name: Build and Package
+
+on:
+  push:
+    branches: [main, develop]
+    tags: ["v*"]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Version to release (without v prefix)"
+        required: false
+        default: ""
+
+env:
+  GO_VERSION: "1.22.2"
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v4
+        with:
+          go-version: ${{ env.GO_VERSION }}
+
+      - name: Cache Go modules
+        uses: actions/cache@v3
+        with:
+          path: ~/go/pkg/mod
+          key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
+          restore-keys: |
+            ${{ runner.os }}-go-
+
+      - name: Download dependencies
+        run: go mod download
+
+      - name: Run tests
+        run: go test -v ./...
+
+      - name: Run go vet
+        run: go vet ./...
+
+      - name: Run staticcheck
+        uses: dominikh/staticcheck-action@v1.3.0
+        with:
+          version: "2023.1.6"
+
+  build:
+    needs: test
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        include:
+          # Linux
+          - goos: linux
+            goarch: amd64
+          - goos: linux
+            goarch: arm64
+          - goos: linux
+            goarch: "386"
+
+          # Windows
+          - goos: windows
+            goarch: amd64
+          - goos: windows
+            goarch: arm64
+          - goos: windows
+            goarch: "386"
+
+          # macOS
+          - goos: darwin
+            goarch: amd64
+          - goos: darwin
+            goarch: arm64
+
+          # FreeBSD
+          - goos: freebsd
+            goarch: amd64
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v4
+        with:
+          go-version: ${{ env.GO_VERSION }}
+
+      - name: Get version
+        id: version
+        run: |
+          if [[ $GITHUB_REF == refs/tags/* ]]; then
+            VERSION=${GITHUB_REF#refs/tags/v}
+          elif [[ "${{ github.event.inputs.version }}" != "" ]]; then
+            VERSION="${{ github.event.inputs.version }}"
+          else
+            VERSION="dev-$(git rev-parse --short HEAD)"
+          fi
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "BUILD_TIME=$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> $GITHUB_OUTPUT
+          echo "IS_RELEASE=${{ startsWith(github.ref, 'refs/tags/') || github.event.inputs.version != '' }}" >> $GITHUB_OUTPUT
+
+      - name: Build binary
+        env:
+          GOOS: ${{ matrix.goos }}
+          GOARCH: ${{ matrix.goarch }}
+          CGO_ENABLED: 0
+        run: |
+          mkdir -p build
+          BINARY_NAME="golang-cli-${{ matrix.goos }}-${{ matrix.goarch }}"
+          if [ "${{ matrix.goos }}" = "windows" ]; then
+            BINARY_NAME="${BINARY_NAME}.exe"
+          fi
+
+          go build \
+            -ldflags="-s -w -X 'main.version=${{ steps.version.outputs.version }}' -X 'main.buildTime=${{ steps.version.outputs.BUILD_TIME }}'" \
+            -o "build/${BINARY_NAME}" \
+            cli.go
+
+      - name: Test binary
+        if: matrix.goos == 'linux' && matrix.goarch == 'amd64'
+        run: |
+          ./build/golang-cli-linux-amd64 version
+          ./build/golang-cli-linux-amd64 --help
+
+      - name: Upload binary
+        uses: actions/upload-artifact@v4
+        with:
+          name: golang-cli-${{ matrix.goos }}-${{ matrix.goarch }}
+          path: build/golang-cli-${{ matrix.goos }}-${{ matrix.goarch }}*
+          retention-days: 30
+
+  package-linux:
+    needs: build
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/') || github.event.inputs.version != ''
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download Linux artifacts
+        uses: actions/download-artifact@v4
+        with:
+          pattern: golang-cli-linux-*
+          path: build-artifacts
+          merge-multiple: true
+
+      - name: Prepare build directory
+        run: |
+          mkdir -p build
+          find build-artifacts -name "golang-cli-linux-*" -exec cp {} build/ \;
+          chmod +x build/*
+          ls -la build/
+
+      - name: Install packaging tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y dpkg-dev rpm
+
+      - name: Create packages
+        run: |
+          chmod +x package.sh
+          ./package.sh deb
+          ./package.sh rpm
+          ./package.sh tarball
+
+      - name: Generate checksums
+        run: |
+          cd packages
+          find . -type f \( -name "*.deb" -o -name "*.rpm" -o -name "*.tar.gz" \) -exec sha256sum {} \; > checksums-linux.txt
+          cat checksums-linux.txt
+
+      - name: Upload packages
+        uses: actions/upload-artifact@v4
+        with:
+          name: linux-packages
+          path: packages/
+          retention-days: 90
+
+  package-windows:
+    needs: build
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/') || github.event.inputs.version != ''
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download Windows artifacts
+        uses: actions/download-artifact@v4
+        with:
+          pattern: golang-cli-windows-*
+          path: build-artifacts
+          merge-multiple: true
+
+      - name: Prepare build directory
+        run: |
+          mkdir -p build
+          find build-artifacts -name "golang-cli-windows-*" -exec cp {} build/ \;
+          ls -la build/
+
+      - name: Install MSI tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y msitools
+
+      - name: Create Windows packages
+        run: |
+          chmod +x package.sh
+          ./package.sh msi || true  # Continue even if MSI creation fails
+          ./package.sh tarball
+
+      - name: Generate checksums
+        run: |
+          cd packages
+          find . -type f \( -name "*.msi" -o -name "*.tar.gz" \) -exec sha256sum {} \; > checksums-windows.txt
+          cat checksums-windows.txt
+
+      - name: Upload packages
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-packages
+          path: packages/
+          retention-days: 90
+
+  package-macos:
+    needs: build
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/') || github.event.inputs.version != ''
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download macOS artifacts
+        uses: actions/download-artifact@v4
+        with:
+          pattern: golang-cli-darwin-*
+          path: build-artifacts
+          merge-multiple: true
+
+      - name: Prepare build directory
+        run: |
+          mkdir -p build
+          find build-artifacts -name "golang-cli-darwin-*" -exec cp {} build/ \;
+          chmod +x build/*
+          ls -la build/
+
+      - name: Create macOS packages
+        run: |
+          chmod +x package.sh
+          ./package.sh pkg
+          ./package.sh tarball
+
+      - name: Generate checksums
+        run: |
+          cd packages
+          find . -type f \( -name "*.pkg" -o -name "*.tar.gz" \) -exec sha256sum {} \; > checksums-macos.txt
+          cat checksums-macos.txt
+
+      - name: Upload packages
+        uses: actions/upload-artifact@v4
+        with:
+          name: macos-packages
+          path: packages/
+          retention-days: 90
+
+  release:
+    needs: [package-linux, package-windows, package-macos]
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/') || github.event.inputs.version != ''
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # Fetch full history for changelog generation
+
+      - name: Get version info
+        id: version
+        run: |
+          if [[ $GITHUB_REF == refs/tags/* ]]; then
+            VERSION=${GITHUB_REF#refs/tags/v}
+            IS_PRERELEASE=false
+          elif [[ "${{ github.event.inputs.version }}" != "" ]]; then
+            VERSION="${{ github.event.inputs.version }}"
+            IS_PRERELEASE=true
+          else
+            VERSION="dev-$(git rev-parse --short HEAD)"
+            IS_PRERELEASE=true
+          fi
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "is_prerelease=$IS_PRERELEASE" >> $GITHUB_OUTPUT
+
+      - name: Download all packages
+        uses: actions/download-artifact@v4
+        with:
+          pattern: "*-packages"
+          path: all-packages
+
+      - name: Prepare release assets
+        run: |
+          mkdir -p release-assets
+
+          # Copy all packages
+          find all-packages -type f \( -name "*.deb" -o -name "*.rpm" -o -name "*.msi" -o -name "*.pkg" -o -name "*.tar.gz" \) -exec cp {} release-assets/ \;
+
+          # Copy checksum files
+          find all-packages -name "checksums-*.txt" -exec cp {} release-assets/ \;
+
+          # Generate combined checksums
+          cd release-assets
+          find . -type f \( -name "*.deb" -o -name "*.rpm" -o -name "*.msi" -o -name "*.pkg" -o -name "*.tar.gz" \) -exec sha256sum {} \; > checksums.txt
+
+          echo "=== Release Assets ==="
+          ls -la
+          echo "=== Combined Checksums ==="
+          cat checksums.txt
+
+      - name: Generate release notes
+        id: release_notes
+        run: |
+          cat > release_notes.md << 'EOF'
+          ## 🚀 Release v${{ steps.version.outputs.version }}
+
+          ### 📦 Installation
+
+          #### Quick Install (Linux/macOS)
+          ```bash
+          curl -fsSL https://raw.githubusercontent.com/yourusername/golang-cli/main/install.sh | bash
+          ```
+
+          #### Package Managers
+
+          **Ubuntu/Debian:**
+          ```bash
+          wget https://github.com/yourusername/golang-cli/releases/download/v${{ steps.version.outputs.version }}/golang-cli_${{ steps.version.outputs.version }}_amd64.deb
+          sudo dpkg -i golang-cli_${{ steps.version.outputs.version }}_amd64.deb
+          ```
+
+          **CentOS/RHEL/Fedora:**
+          ```bash
+          wget https://github.com/yourusername/golang-cli/releases/download/v${{ steps.version.outputs.version }}/golang-cli-${{ steps.version.outputs.version }}-1.x86_64.rpm
+          sudo rpm -i golang-cli-${{ steps.version.outputs.version }}-1.x86_64.rpm
+          ```
+
+          **Windows:**
+          Download and run the `.msi` installer from the assets below.
+
+          **macOS:**
+          Download and run the `.pkg` installer from the assets below.
+
+          #### Manual Installation
+          Download the appropriate archive for your platform from the assets below, extract it, and copy the binary to your PATH.
+
+          ### 📋 Supported Platforms
+
+          - Linux (amd64, arm64, 386)
+          - Windows (amd64, arm64, 386)
+          - macOS (amd64, arm64)
+          - FreeBSD (amd64)
+
+          ### 🔐 Verification
+
+          All packages include SHA256 checksums. Verify your download:
+          ```bash
+          sha256sum golang-cli-*
+          # Compare with checksums.txt
+          ```
+
+          ### 📝 Changes
+
+          EOF
+
+          # Add git log since last tag (if available)
+          if git describe --tags --abbrev=0 HEAD~1 >/dev/null 2>&1; then
+            PREV_TAG=$(git describe --tags --abbrev=0 HEAD~1)
+            echo "Changes since $PREV_TAG:" >> release_notes.md
+            echo "" >> release_notes.md
+            git log --pretty=format:"- %s" $PREV_TAG..HEAD >> release_notes.md
+          else
+            echo "Initial release" >> release_notes.md
+          fi
+
+          echo 'RELEASE_NOTES<<EOF' >> $GITHUB_OUTPUT
+          cat release_notes.md >> $GITHUB_OUTPUT
+          echo 'EOF' >> $GITHUB_OUTPUT
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: ${{ startsWith(github.ref, 'refs/tags/') && github.ref_name || format('v{0}', steps.version.outputs.version) }}
+          name: ${{ format('Release v{0}', steps.version.outputs.version) }}
+          body: ${{ steps.release_notes.outputs.RELEASE_NOTES }}
+          files: release-assets/*
+          draft: false
+          prerelease: ${{ steps.version.outputs.is_prerelease == 'true' }}
+          generate_release_notes: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Update package repositories
+        if: steps.version.outputs.is_prerelease == 'false'
+        run: |
+          echo "🚀 Release v${{ steps.version.outputs.version }} published!"
+          echo "📦 Packages available at: https://github.com/${{ github.repository }}/releases/tag/v${{ steps.version.outputs.version }}"
+          echo "📖 Installation instructions: https://github.com/${{ github.repository }}#installation"

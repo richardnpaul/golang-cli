@@ -1,0 +1,194 @@
+name: Build Development Packages
+
+on:
+  workflow_dispatch:
+    inputs:
+      platforms:
+        description: "Platforms to build (comma-separated: linux,windows,macos,all)"
+        required: false
+        default: "all"
+      create_packages:
+        description: "Create distribution packages"
+        type: boolean
+        required: false
+        default: true
+
+env:
+  GO_VERSION: "1.22.2"
+
+jobs:
+  setup:
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.set-matrix.outputs.matrix }}
+      should_package: ${{ steps.set-matrix.outputs.should_package }}
+    steps:
+      - name: Set build matrix
+        id: set-matrix
+        run: |
+          platforms="${{ github.event.inputs.platforms || 'all' }}"
+          should_package="${{ github.event.inputs.create_packages || 'true' }}"
+
+          if [[ "$platforms" == "all" ]]; then
+            matrix='[
+              {"goos": "linux", "goarch": "amd64"},
+              {"goos": "linux", "goarch": "arm64"},
+              {"goos": "linux", "goarch": "386"},
+              {"goos": "windows", "goarch": "amd64"},
+              {"goos": "windows", "goarch": "arm64"},
+              {"goos": "windows", "goarch": "386"},
+              {"goos": "darwin", "goarch": "amd64"},
+              {"goos": "darwin", "goarch": "arm64"},
+              {"goos": "freebsd", "goarch": "amd64"}
+            ]'
+          else
+            matrix='[]'
+            IFS=',' read -ra ADDR <<< "$platforms"
+            for platform in "${ADDR[@]}"; do
+              case $platform in
+                linux)
+                  matrix=$(echo $matrix | jq '. + [{"goos": "linux", "goarch": "amd64"}, {"goos": "linux", "goarch": "arm64"}, {"goos": "linux", "goarch": "386"}]')
+                  ;;
+                windows)
+                  matrix=$(echo $matrix | jq '. + [{"goos": "windows", "goarch": "amd64"}, {"goos": "windows", "goarch": "arm64"}, {"goos": "windows", "goarch": "386"}]')
+                  ;;
+                macos)
+                  matrix=$(echo $matrix | jq '. + [{"goos": "darwin", "goarch": "amd64"}, {"goos": "darwin", "goarch": "arm64"}]')
+                  ;;
+              esac
+            done
+          fi
+
+          echo "matrix={\"include\":$matrix}" >> $GITHUB_OUTPUT
+          echo "should_package=$should_package" >> $GITHUB_OUTPUT
+
+  build:
+    needs: setup
+    runs-on: ubuntu-latest
+    strategy:
+      matrix: ${{fromJson(needs.setup.outputs.matrix)}}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v4
+        with:
+          go-version: ${{ env.GO_VERSION }}
+
+      - name: Get version
+        id: version
+        run: |
+          VERSION="dev-$(git rev-parse --short HEAD)-$(date +%Y%m%d)"
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "BUILD_TIME=$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> $GITHUB_OUTPUT
+
+      - name: Build binary
+        env:
+          GOOS: ${{ matrix.goos }}
+          GOARCH: ${{ matrix.goarch }}
+          CGO_ENABLED: 0
+        run: |
+          mkdir -p build
+          BINARY_NAME="golang-cli-${{ matrix.goos }}-${{ matrix.goarch }}"
+          if [ "${{ matrix.goos }}" = "windows" ]; then
+            BINARY_NAME="${BINARY_NAME}.exe"
+          fi
+
+          go build \
+            -ldflags="-s -w -X 'main.version=${{ steps.version.outputs.version }}' -X 'main.buildTime=${{ steps.version.outputs.BUILD_TIME }}'" \
+            -o "build/${BINARY_NAME}" \
+            cli.go
+
+      - name: Upload binary
+        uses: actions/upload-artifact@v4
+        with:
+          name: dev-golang-cli-${{ matrix.goos }}-${{ matrix.goarch }}
+          path: build/golang-cli-${{ matrix.goos }}-${{ matrix.goarch }}*
+          retention-days: 7
+
+  package:
+    needs: [setup, build]
+    runs-on: ubuntu-latest
+    if: needs.setup.outputs.should_package == 'true'
+    strategy:
+      matrix:
+        platform: [linux, windows, macos]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download artifacts for platform
+        uses: actions/download-artifact@v4
+        with:
+          pattern: dev-golang-cli-${{ matrix.platform == 'macos' && 'darwin' || matrix.platform }}-*
+          path: build-artifacts
+          merge-multiple: true
+
+      - name: Prepare build directory
+        run: |
+          mkdir -p build
+          find build-artifacts -name "golang-cli-*" -exec cp {} build/ \;
+          chmod +x build/* 2>/dev/null || true
+          ls -la build/
+
+      - name: Install packaging tools
+        if: matrix.platform == 'linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y dpkg-dev rpm
+
+      - name: Install MSI tools
+        if: matrix.platform == 'windows'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y msitools
+
+      - name: Create packages
+        run: |
+          chmod +x package.sh
+          case "${{ matrix.platform }}" in
+            linux)
+              ./package.sh deb || true
+              ./package.sh rpm || true
+              ;;
+            windows)
+              ./package.sh msi || true
+              ;;
+            macos)
+              ./package.sh pkg || true
+              ;;
+          esac
+          ./package.sh tarball
+
+      - name: Upload packages
+        uses: actions/upload-artifact@v4
+        with:
+          name: dev-${{ matrix.platform }}-packages
+          path: packages/
+          retention-days: 7
+
+  summary:
+    needs: [setup, build, package]
+    runs-on: ubuntu-latest
+    if: always()
+
+    steps:
+      - name: Development Build Summary
+        run: |
+          echo "## 🔨 Development Build Complete"
+          echo ""
+          echo "**Platforms built:** ${{ github.event.inputs.platforms || 'all' }}"
+          echo "**Packages created:** ${{ github.event.inputs.create_packages || 'true' }}"
+          echo "**Build ID:** dev-$(git rev-parse --short HEAD 2>/dev/null || echo 'unknown')-$(date +%Y%m%d)"
+          echo ""
+          echo "### 📦 Artifacts"
+          echo "- Binaries: Available for 7 days"
+          if [[ "${{ github.event.inputs.create_packages }}" == "true" ]]; then
+            echo "- Packages: Available for 7 days"
+          fi
+          echo ""
+          echo "### 🚀 Next Steps"
+          echo "1. Download artifacts from the Actions tab"
+          echo "2. Test the binaries/packages"
+          echo "3. Create a release tag when ready: \`git tag v1.0.0 && git push origin v1.0.0\`"
