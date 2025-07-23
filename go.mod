@@ -1,6 +1,6 @@
 module golang-cli
 
-go 1.22.2
+go 1.22
 
 require (
 	github.com/inconshreveable/mousetrap v1.1.0 // indirect
