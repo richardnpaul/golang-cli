@@ -11,11 +11,11 @@ BUILD_DIR=build
 
 # Build the application for current platform
 build:
-	go build -o $(BINARY_NAME) cli.go
+	go build -o $(BINARY_NAME) cmd/golang-cli/main.go
 
 # Run the application
 run:
-	go run cli.go
+	go run cmd/golang-cli/main.go
 
 # Clean build artifacts
 clean:
@@ -43,31 +43,31 @@ build-all: build-linux build-windows build-macos
 build-linux:
 	@echo "Building for Linux..."
 	@mkdir -p $(BUILD_DIR)
-	GOOS=linux GOARCH=amd64 go build -o $(BUILD_DIR)/$(BINARY_NAME)-linux-amd64 cli.go
-	GOOS=linux GOARCH=arm64 go build -o $(BUILD_DIR)/$(BINARY_NAME)-linux-arm64 cli.go
-	GOOS=linux GOARCH=386 go build -o $(BUILD_DIR)/$(BINARY_NAME)-linux-386 cli.go
+	GOOS=linux GOARCH=amd64 go build -o $(BUILD_DIR)/$(BINARY_NAME)-linux-amd64 cmd/golang-cli/main.go
+	GOOS=linux GOARCH=arm64 go build -o $(BUILD_DIR)/$(BINARY_NAME)-linux-arm64 cmd/golang-cli/main.go
+	GOOS=linux GOARCH=386 go build -o $(BUILD_DIR)/$(BINARY_NAME)-linux-386 cmd/golang-cli/main.go
 
 # Build for Windows (multiple architectures)
 build-windows:
 	@echo "Building for Windows..."
 	@mkdir -p $(BUILD_DIR)
-	GOOS=windows GOARCH=amd64 go build -o $(BUILD_DIR)/$(BINARY_NAME)-windows-amd64.exe cli.go
-	GOOS=windows GOARCH=arm64 go build -o $(BUILD_DIR)/$(BINARY_NAME)-windows-arm64.exe cli.go
-	GOOS=windows GOARCH=386 go build -o $(BUILD_DIR)/$(BINARY_NAME)-windows-386.exe cli.go
+	GOOS=windows GOARCH=amd64 go build -o $(BUILD_DIR)/$(BINARY_NAME)-windows-amd64.exe cmd/golang-cli/main.go
+	GOOS=windows GOARCH=arm64 go build -o $(BUILD_DIR)/$(BINARY_NAME)-windows-arm64.exe cmd/golang-cli/main.go
+	GOOS=windows GOARCH=386 go build -o $(BUILD_DIR)/$(BINARY_NAME)-windows-386.exe cmd/golang-cli/main.go
 
 # Build for macOS (multiple architectures)
 build-macos:
 	@echo "Building for macOS..."
 	@mkdir -p $(BUILD_DIR)
-	GOOS=darwin GOARCH=amd64 go build -o $(BUILD_DIR)/$(BINARY_NAME)-darwin-amd64 cli.go
-	GOOS=darwin GOARCH=arm64 go build -o $(BUILD_DIR)/$(BINARY_NAME)-darwin-arm64 cli.go
+	GOOS=darwin GOARCH=amd64 go build -o $(BUILD_DIR)/$(BINARY_NAME)-darwin-amd64 cmd/golang-cli/main.go
+	GOOS=darwin GOARCH=arm64 go build -o $(BUILD_DIR)/$(BINARY_NAME)-darwin-arm64 cmd/golang-cli/main.go
 
 # Build for additional platforms
 build-cross:
 	@echo "Building for additional platforms..."
 	@mkdir -p $(BUILD_DIR)
-	GOOS=freebsd GOARCH=amd64 go build -o $(BUILD_DIR)/$(BINARY_NAME)-freebsd-amd64 cli.go
-	GOOS=openbsd GOARCH=amd64 go build -o $(BUILD_DIR)/$(BINARY_NAME)-openbsd-amd64 cli.go
+	GOOS=freebsd GOARCH=amd64 go build -o $(BUILD_DIR)/$(BINARY_NAME)-freebsd-amd64 cmd/golang-cli/main.go
+	GOOS=openbsd GOARCH=amd64 go build -o $(BUILD_DIR)/$(BINARY_NAME)-openbsd-amd64 cmd/golang-cli/main.go
 	GOOS=netbsd GOARCH=amd64 go build -o $(BUILD_DIR)/$(BINARY_NAME)-netbsd-amd64 cli.go
 
 # Build with version and build info

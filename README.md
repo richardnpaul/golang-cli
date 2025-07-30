@@ -8,6 +8,9 @@ A simple command-line interface tool built with Go and the Cobra library.
 - 📦 Easy to build and distribute
 - 🔧 Extensible command structure
 - 💡 Example commands included
+- 🌐 HTTP API integration with JSON parsing
+- 📊 Multiple output formats (table, JSON, simple)
+- ⏱️ HTTP timeout handling and error management
 
 ## Installation
 
@@ -49,6 +52,7 @@ go run cli.go [command]
 
 - `golang-cli` - Show welcome message
 - `golang-cli hello [name]` - Say hello to someone
+- `golang-cli users` - Fetch and display user data from dummyjson.com API
 - `golang-cli version` - Show version information
 - `golang-cli help` - Show help information
 
@@ -64,11 +68,43 @@ go run cli.go [command]
 # Say hello to a specific person
 ./golang-cli hello Alice
 
+# Fetch user data (default format, 10 users)
+./golang-cli users
+
+# Fetch users with different options
+./golang-cli users --limit 5 --format table
+./golang-cli users --limit 3 --skip 10 --format simple
+./golang-cli users --limit 2 --format json
+
 # Show version
 ./golang-cli version
 
 # Show help
 ./golang-cli --help
+```
+
+#### Users Command Options
+
+The `users` command fetches data from the [dummyjson.com API](https://dummyjson.com/users) and supports various options:
+
+- `--limit, -l`: Number of users to fetch (default: 10, max: 100)
+- `--skip, -s`: Number of users to skip for pagination (default: 0)
+- `--format, -f`: Output format options:
+  - `default`: Detailed card-style display with emojis
+  - `table`: Tabular format with columns
+  - `simple`: Minimal one-line per user
+  - `json`: Raw JSON output
+
+**Examples:**
+```bash
+# Get first 5 users in table format
+./golang-cli users -l 5 -f table
+
+# Get users 11-20 in simple format  
+./golang-cli users -l 10 -s 10 -f simple
+
+# Get 3 users as JSON for processing
+./golang-cli users -l 3 -f json | jq '.[0].email'
 ```
 
 ## Distribution Packages

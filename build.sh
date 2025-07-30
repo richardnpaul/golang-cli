@@ -46,7 +46,7 @@ build_platform() {
 
     print_status "Building for ${goos}/${goarch}..."
 
-    if GOOS=$goos GOARCH=$goarch go build -ldflags="$LDFLAGS" -o "${BUILD_DIR}/${output_name}" cli.go; then
+    if GOOS=$goos GOARCH=$goarch go build -ldflags="$LDFLAGS" -o "${BUILD_DIR}/${output_name}" cmd/golang-cli/main.go; then
         local size=$(du -h "${BUILD_DIR}/${output_name}" | cut -f1)
         print_success "Built ${output_name} (${size})"
     else
