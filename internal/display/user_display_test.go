@@ -72,7 +72,7 @@ func TestTruncateString(t *testing.T) {
 	for _, test := range tests {
 		result := truncateString(test.input, test.maxLen)
 		if result != test.expected {
-			t.Errorf("truncateString(%q, %d) = %q, want %q", 
+			t.Errorf("truncateString(%q, %d) = %q, want %q",
 				test.input, test.maxLen, result, test.expected)
 		}
 	}

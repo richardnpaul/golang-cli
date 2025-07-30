@@ -5,6 +5,7 @@ import (
 	"os"
 
 	"golang-cli/internal/service"
+
 	"github.com/spf13/cobra"
 )
 
@@ -18,7 +19,7 @@ func NewUsersCommand() *cobra.Command {
 			limit, _ := cmd.Flags().GetInt("limit")
 			skip, _ := cmd.Flags().GetInt("skip")
 			format, _ := cmd.Flags().GetString("format")
-			
+
 			userService := service.NewUserService("https://dummyjson.com")
 			if err := userService.GetUsersAndDisplay(limit, skip, format); err != nil {
 				fmt.Fprintf(os.Stderr, "Error fetching users: %v\n", err)
@@ -26,11 +27,11 @@ func NewUsersCommand() *cobra.Command {
 			}
 		},
 	}
-	
+
 	// Add flags
 	cmd.Flags().IntP("limit", "l", 10, "Number of users to fetch (max 100)")
 	cmd.Flags().IntP("skip", "s", 0, "Number of users to skip")
 	cmd.Flags().StringP("format", "f", "default", "Output format: default, table, simple, json")
-	
+
 	return cmd
 }

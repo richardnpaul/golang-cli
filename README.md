@@ -100,7 +100,7 @@ The `users` command fetches data from the [dummyjson.com API](https://dummyjson.
 # Get first 5 users in table format
 ./golang-cli users -l 5 -f table
 
-# Get users 11-20 in simple format  
+# Get users 11-20 in simple format
 ./golang-cli users -l 10 -s 10 -f simple
 
 # Get 3 users as JSON for processing

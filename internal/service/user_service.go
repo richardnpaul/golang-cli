@@ -24,14 +24,14 @@ func NewUserService(apiBaseURL string) *UserService {
 // GetUsersAndDisplay fetches users and displays them in the specified format
 func (s *UserService) GetUsersAndDisplay(limit, skip int, format string) error {
 	// Log the request URL for transparency
-	fmt.Printf("Fetching users from: %s/users?limit=%d&skip=%d\n", 
+	fmt.Printf("Fetching users from: %s/users?limit=%d&skip=%d\n",
 		s.getBaseURL(), limit, skip)
-	
+
 	usersResp, err := s.client.FetchUsers(limit, skip)
 	if err != nil {
 		return fmt.Errorf("failed to fetch users: %w", err)
 	}
-	
+
 	s.displayer.Display(usersResp, format)
 	return nil
 }

@@ -18,7 +18,7 @@ func NewUserDisplayer() *UserDisplayer {
 // Display shows users in the specified format
 func (d *UserDisplayer) Display(usersResp *models.UsersResponse, format string) {
 	d.printSummary(usersResp)
-	
+
 	switch format {
 	case "json":
 		d.displayJSON(usersResp.Users)
@@ -32,7 +32,7 @@ func (d *UserDisplayer) Display(usersResp *models.UsersResponse, format string) 
 }
 
 func (d *UserDisplayer) printSummary(usersResp *models.UsersResponse) {
-	fmt.Printf("\n📊 Found %d users (showing %d, skipped %d)\n\n", 
+	fmt.Printf("\n📊 Found %d users (showing %d, skipped %d)\n\n",
 		usersResp.Total, len(usersResp.Users), usersResp.Skip)
 }
 
@@ -43,14 +43,14 @@ func (d *UserDisplayer) displayJSON(users []models.User) {
 
 func (d *UserDisplayer) displayTable(users []models.User) {
 	// Header
-	fmt.Printf("%-4s %-15s %-15s %-25s %-15s %-5s\n", 
+	fmt.Printf("%-4s %-15s %-15s %-25s %-15s %-5s\n",
 		"ID", "First Name", "Last Name", "Email", "Phone", "Age")
 	fmt.Println("------------------------------------------------------------------------------------")
-	
+
 	// Rows
 	for _, user := range users {
 		fmt.Printf("%-4d %-15s %-15s %-25s %-15s %-5d\n",
-			user.ID, 
+			user.ID,
 			truncateString(user.FirstName, 14),
 			truncateString(user.LastName, 14),
 			truncateString(user.Email, 24),
@@ -61,7 +61,7 @@ func (d *UserDisplayer) displayTable(users []models.User) {
 
 func (d *UserDisplayer) displaySimple(users []models.User) {
 	for _, user := range users {
-		fmt.Printf("%d: %s %s (%s)\n", 
+		fmt.Printf("%d: %s %s (%s)\n",
 			user.ID, user.FirstName, user.LastName, user.Email)
 	}
 }
@@ -78,7 +78,7 @@ func (d *UserDisplayer) displayDefault(users []models.User) {
 			fmt.Printf("   Company: %s (%s)\n", user.Company.Name, user.Company.Department)
 			fmt.Printf("   Title: %s\n", user.Company.Title)
 		}
-		
+
 		if i < len(users)-1 {
 			fmt.Println()
 		}
