@@ -1,6 +1,6 @@
 # Go CLI Tool Makefile
 
-.PHONY: build run clean test help install build-all build-linux build-windows build-macos build-cross build-release build-info package package-all package-deb package-rpm package-msi package-tarball
+.PHONY: build run clean test help install build-all build-linux build-windows build-macos build-cross build-release build-info package package-all package-deb package-rpm package-msi package-tarball fmt vet lint check pre-commit
 
 # Binary name
 BINARY_NAME=golang-cli
@@ -26,6 +26,26 @@ clean:
 # Run tests
 test:
 	go test -v ./...
+
+# Format Go code
+fmt:
+	go fmt ./...
+
+# Vet Go code for suspicious constructs
+vet:
+	go vet ./...
+
+# Run basic linting
+lint: fmt vet
+	@echo "Basic linting completed"
+
+# Run all checks (linting + tests)
+check: lint test
+	@echo "All checks passed"
+
+# Run pre-commit hooks manually
+pre-commit:
+	pre-commit run --all-files
 
 # Install dependencies
 deps:
@@ -129,6 +149,11 @@ help:
 	@echo "  run           - Run the application with go run"
 	@echo "  clean         - Clean build artifacts"
 	@echo "  test          - Run tests"
+	@echo "  fmt           - Format Go code"
+	@echo "  vet           - Vet Go code for suspicious constructs"
+	@echo "  lint          - Run basic linting (fmt + vet)"
+	@echo "  check         - Run all checks (lint + test)"
+	@echo "  pre-commit    - Run pre-commit hooks manually"
 	@echo "  deps          - Download and tidy dependencies"
 	@echo "  install       - Install binary to GOPATH/bin"
 	@echo "  help          - Show this help message"
