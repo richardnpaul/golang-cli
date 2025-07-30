@@ -1,0 +1,31 @@
+linters:
+  enable:
+    - errcheck
+    - gosimple
+    - govet
+    - ineffassign
+    - staticcheck
+    - typecheck
+    - unused
+    - gofmt
+    - goimports
+    - gosec
+    - misspell
+    - revive
+    - stylecheck
+
+linters-settings:
+  errcheck:
+    check-type-assertions: true
+  gosec:
+    excludes:
+      - G404 # Use of weak random number generator is OK for non-crypto use
+  revive:
+    rules:
+      - name: exported-function
+      - name: exported-type
+      - name: exported-var
+
+issues:
+  max-issues-per-linter: 50
+  max-same-issues: 3
