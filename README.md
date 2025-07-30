@@ -309,6 +309,29 @@ git push origin v1.0.0
 4. Test your changes
 5. Submit a pull request
 
+## Documentation
+
+- 📋 **[Pre-commit Setup Guide](PRE_COMMIT_SETUP.md)** - How to use pre-commit hooks and local linting
+- 🏗️ **[Project Architecture](ARCHITECTURE.md)** - Code organization and structure details
+- ⚙️ **[GitHub Actions Setup](GITHUB_ACTIONS_SETUP.md)** - CI/CD workflow dependencies and quality gates
+- 📦 **[Reorganization Summary](REORGANIZATION_SUMMARY.md)** - Details of the code restructuring
+
+## Quality Assurance
+
+This project uses comprehensive quality checks:
+
+- ✅ **Pre-commit hooks** - Automatic formatting and basic checks
+- ✅ **Go linting** - Advanced static analysis with golangci-lint
+- ✅ **Security scanning** - Vulnerability detection with gosec
+- ✅ **Test coverage** - Unit tests with race detection
+- ✅ **GitHub Actions** - All builds require quality checks to pass
+
+Run quality checks locally:
+```bash
+make check      # Run all checks (format, vet, test)
+make pre-commit # Run pre-commit hooks manually
+```
+
 ## License
 
 This project is licensed under the MIT License.
